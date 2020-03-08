@@ -55,6 +55,8 @@ const int SECOND = 1;
 const int MINUTE = 60 * SECOND;
 const int HOUR = 60 * MINUTE;
 
+const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
+
 const int UPDATE_EVERY_SECONDS = 5 * MINUTE;
 
 int32_t nowSeconds = 0;
@@ -143,28 +145,36 @@ void displayTime() {
   strip.clear();
 
   if (on) {
-    initArray(gArr, LED_COUNT);
-
-    // Hourly ticks
-    int hourEach = 60 / 12;
-    for (int i = 0; i < 12; i++) {
-      gArr[i * hourEach] = 10;
-    }
-
-    initArray(rArr, LED_COUNT);
-    initArray(bArr, LED_COUNT);
-
     auto tzTime = ZonedDateTime::forEpochSeconds(nowSeconds, tz);
     auto hour = tzTime.hour() % 12;
     auto minute = tzTime.minute();
     auto second = tzTime.second();
 
-    int hourIn60 = (hour * 60 + minute) * 5 / 60;
+    int hourIn60 = (hour * 60 + minute) * HOUR_EVERY_N_LEDS / LED_COUNT;
+
+    initArray(rArr, LED_COUNT);
+    initArray(gArr, LED_COUNT);
+    initArray(bArr, LED_COUNT);
+
+    // Hourly ticks
+    for (int i = 0; i < 12; i++) {
+      gArr[i * HOUR_EVERY_N_LEDS] = 10;
+    }
+
+    // From Hour to Minute
+    for (int i = hourIn60; i < (minute < hourIn60 ? minute + 60 : minute); i++) {
+      bArr[i % 60] = 10;
+    }
+
+    // And back
+    for (int i = minute; i < (hourIn60 < minute ? hourIn60 + 60 : hourIn60); i++) {
+      rArr[i % 60] = 10;
+    }
 
     // clock hands
     bArr[hourIn60] = 255;
     rArr[minute] = 255;
-    gArr[second] = 100;
+    gArr[second] = 120;
 
     for (int i = 0; i < LED_COUNT; i++) {
       setRgb(i, rArr[i], gArr[i], bArr[i]);
