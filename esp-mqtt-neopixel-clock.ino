@@ -104,6 +104,10 @@ int rArr[LED_COUNT];
 int gArr[LED_COUNT];
 int bArr[LED_COUNT];
 
+const int INTERVALS = 4;
+const int INTERVAL_WAIT = 1000 / INTERVALS;
+int interval = 0;
+
 void loop() {
   client.loop();
 
@@ -111,23 +115,27 @@ void loop() {
     updateTime();
   }
 
-  Serial.print("now ");
-  Serial.print(nowSeconds % 60);
-  Serial.print(" at ");
-  Serial.println(millis() % 1000);
-
   displayTime();
 
-  // Update every 5 min -> update on 4:55 so 5:00 will be accurate
-  if (nowSeconds % UPDATE_EVERY_SECONDS == UPDATE_EVERY_SECONDS - 5) {
-    delay(900);
-    nowSeconds++;
-    updateTime();
+  if (++interval < INTERVALS) {
+    delay(INTERVAL_WAIT);
   } else {
-    auto current = millis() % 1000;
-    auto distance = (1000 + referenceMillis - current) % 1000;
-    delay(distance);
     nowSeconds++;
+    interval = 0;
+
+    // Update every 5 min -> update on 4:55 so 5:00 will be accurate
+    if (nowSeconds % UPDATE_EVERY_SECONDS == UPDATE_EVERY_SECONDS - 5) {
+      updateTime();
+    } else {
+      auto current = millis() % 1000;
+      auto distance = (1000 + referenceMillis - current) % 1000;
+      delay(distance);
+    }
+
+    Serial.print("now ");
+    Serial.print(nowSeconds % 60);
+    Serial.print(" at ");
+    Serial.println(millis() % 1000);
   }
 }
 
