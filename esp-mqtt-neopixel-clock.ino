@@ -121,7 +121,7 @@ void loop() {
     // Hourly ticks
     int hourEach = 60 / 12;
     for (int i = 0; i < 12; i++) {
-      gArr[i * hourEach] = 20;
+      gArr[i * hourEach] = 10;
     }
 
     initArray(rArr, LED_COUNT);
@@ -135,8 +135,8 @@ void loop() {
     int hourIn60 = (hour * 60 + minute) * 5 / 60;
 
     // clock hands
-    rArr[hourIn60] = 255;
-    bArr[minute] = 255;
+    bArr[hourIn60] = 255;
+    rArr[minute] = 255;
     gArr[second] = 100;
 
     for (int i = 0; i < LED_COUNT; i++) {
