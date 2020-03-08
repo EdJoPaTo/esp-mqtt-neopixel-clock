@@ -55,11 +55,11 @@ const int SECOND = 1;
 const int MINUTE = 60 * SECOND;
 const int HOUR = 60 * MINUTE;
 
-const int SECONDS = 60;
-const int MINUTES = 60 * SECONDS;
-const int HOURS = 12 * MINUTES;
+const int UPDATE_EVERY_SECONDS = 5 * MINUTE;
 
 int32_t nowSeconds = 0;
+int referenceMillis = 0;
+boolean timeUnknown = true;
 static BasicZoneProcessor berlinProcessor;
 TimeZone tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Berlin, &berlinProcessor);
 static NtpClock ntpClock("fritz.box");
@@ -104,16 +104,35 @@ int rArr[LED_COUNT];
 int gArr[LED_COUNT];
 int bArr[LED_COUNT];
 
-const int INTERVALS = 4;
-
 void loop() {
   client.loop();
-  strip.clear();
 
-  auto now = ntpClock.getNow();
-  if (now != LocalDate::kInvalidEpochSeconds) {
-    nowSeconds = now;
+  if (timeUnknown) {
+    updateTime();
   }
+
+  Serial.print("now ");
+  Serial.print(nowSeconds % 60);
+  Serial.print(" at ");
+  Serial.println(millis() % 1000);
+
+  displayTime();
+
+  // Update every 5 min -> update on 4:55 so 5:00 will be accurate
+  if (nowSeconds % UPDATE_EVERY_SECONDS == UPDATE_EVERY_SECONDS - 5) {
+    delay(900);
+    nowSeconds++;
+    updateTime();
+  } else {
+    auto current = millis() % 1000;
+    auto distance = (1000 + referenceMillis - current) % 1000;
+    delay(distance);
+    nowSeconds++;
+  }
+}
+
+void displayTime() {
+  strip.clear();
 
   if (on) {
     initArray(gArr, LED_COUNT);
@@ -145,7 +164,6 @@ void loop() {
   }
 
   strip.show();
-  delay(1000 / INTERVALS);
 }
 
 void setRgb(int clockIndex, int r, int g, int b) {
@@ -157,4 +175,35 @@ void initArray(int array[], int length) {
   for (int i = 0; i < length; i++) {
     array[i] = 0;
   }
+}
+
+void updateTime() {
+  auto start = millis();
+  auto first = ntpClock.getNow();
+  if (first == LocalDate::kInvalidEpochSeconds) {
+    return;
+  }
+
+  int32_t second = first;
+  int32_t tmp;
+  while (second == first) {
+    delay(20);
+
+    tmp = ntpClock.getNow();
+    if (tmp != LocalDate::kInvalidEpochSeconds) {
+      second = tmp;
+    }
+  }
+
+  referenceMillis = millis() % 1000;
+  nowSeconds = second;
+  timeUnknown = false;
+
+  auto took = millis() - start;
+
+  Serial.print("updateTime finished at ");
+  Serial.print(referenceMillis);
+  Serial.print(" and took ");
+  Serial.print(took);
+  Serial.println("ms");
 }
