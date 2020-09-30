@@ -113,20 +113,14 @@ void onConnectionEstablished() {
   lastConnected = 1;
 }
 
-uint8_t hueArr[LED_COUNT];
+uint16_t hueArr[LED_COUNT];
 uint8_t satArr[LED_COUNT];
 uint8_t briArr[LED_COUNT];
 const int BASE_BRIGHTNESS_FACTOR = 6;
 
-void setHsv(int clockIndex, uint8_t hue, uint8_t sat, uint8_t bri) {
+void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
   uint16_t pixel = (clockIndex + 43) % LED_COUNT;
   strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
-}
-
-void initArray(uint8_t array[], int length, uint8_t initValue) {
-  for (int i = 0; i < length; i++) {
-    array[i] = initValue;
-  }
 }
 
 void displayTime() {
@@ -139,11 +133,13 @@ void displayTime() {
     auto second = tzTime.second();
 
     auto totalMinuteOfHalfDay = (hour * 60) + minute;
-    uint8_t hue = totalMinuteOfHalfDay % 360;
+    uint16_t hue = totalMinuteOfHalfDay % 360;
 
-    initArray(hueArr, LED_COUNT, hue);
-    initArray(satArr, LED_COUNT, 100);
-    initArray(briArr, LED_COUNT, mqttBri / BASE_BRIGHTNESS_FACTOR);
+    for (int i = 0; i < LED_COUNT; i++) {
+      hueArr[i] = hue;
+      satArr[i] = 100;
+      briArr[i] = mqttBri / BASE_BRIGHTNESS_FACTOR;
+    }
 
     // Hourly ticks
     for (int i = 0; i < 12; i++) {
