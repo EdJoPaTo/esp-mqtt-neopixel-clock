@@ -77,7 +77,7 @@ TimeZone tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Berlin, &berlinProcesso
 static NtpClock ntpClock("fritz.box");
 
 boolean on = true;
-uint8_t mqttBri = 5;
+uint8_t mqttBri = 1;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
