@@ -116,7 +116,7 @@ void onConnectionEstablished() {
 uint8_t hueArr[LED_COUNT];
 uint8_t satArr[LED_COUNT];
 uint8_t briArr[LED_COUNT];
-const int BASE_BRIGHTNESS_FACTOR = 5;
+const int BASE_BRIGHTNESS_FACTOR = 6;
 
 void setHsv(int clockIndex, uint8_t hue, uint8_t sat, uint8_t bri) {
   uint16_t pixel = (clockIndex + 43) % LED_COUNT;
