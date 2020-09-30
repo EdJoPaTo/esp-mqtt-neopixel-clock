@@ -10,7 +10,9 @@
 
 #include <AceTime.h>
 #include <Adafruit_NeoPixel.h>
+#include <DHTesp.h>
 #include <EspMQTTClient.h>
+#include <MqttKalmanPublish.h>
 
 using namespace ace_time;
 using namespace ace_time::clock;
@@ -28,6 +30,7 @@ EspMQTTClient client(
 );
 
 const bool MQTT_RETAINED = true;
+int lastConnected = 0;
 
 #define BASIC_TOPIC CLIENT_NAME "/"
 #define BASIC_TOPIC_SET BASIC_TOPIC "set/"
@@ -35,7 +38,8 @@ const bool MQTT_RETAINED = true;
 
 
 // Which pin is connected to the NeoPixels?
-const int LED_PIN = 13;
+const int LED_PIN = 13; // D7
+const int DHTPIN = 12; // D6
 
 // How many NeoPixels are attached?
 const int LED_COUNT = 60;
@@ -59,6 +63,12 @@ const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
 
 const int UPDATE_EVERY_SECONDS = 5 * MINUTE;
 
+DHTesp dht;
+
+MQTTKalmanPublish mkTemp(client, BASIC_TOPIC_STATUS "temp", MQTT_RETAINED, 12 * 2 /* every 2 min */, 0.2);
+MQTTKalmanPublish mkHum(client, BASIC_TOPIC_STATUS "hum", MQTT_RETAINED, 12 * 5 /* every 5 min */, 2);
+MQTTKalmanPublish mkRssi(client, BASIC_TOPIC_STATUS "rssi", MQTT_RETAINED, 12 * 5 /* every 5 min */, 10);
+
 int32_t nowSeconds = 0;
 int referenceMillis = 0;
 boolean timeUnknown = true;
@@ -79,6 +89,8 @@ void setup() {
   strip.clear();
   // strip.show();            // Turn OFF all pixels ASAP
 
+  dht.setup(DHTPIN, DHTesp::DHT22);
+
   // Optional functionnalities of EspMQTTClient
   client.enableDebuggingMessages(); // Enable debugging messages sent to serial output
   client.enableLastWillMessage(BASIC_TOPIC "connected", "0", MQTT_RETAINED);
@@ -97,8 +109,8 @@ void onConnectionEstablished() {
     client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
   });
 
-  client.publish(BASIC_TOPIC "connected", "2", MQTT_RETAINED);
-  digitalWrite(LED_BUILTIN, HIGH);
+  client.publish(BASIC_TOPIC "connected", "1", MQTT_RETAINED);
+  lastConnected = 1;
 }
 
 uint8_t hueArr[LED_COUNT];
@@ -198,9 +210,58 @@ const int INTERVAL_WAIT = 1000 / INTERVALS;
 int interval = 0;
 
 void loop() {
+  if (!client.isConnected()) {
+    lastConnected = 0;
+  }
+
   client.loop();
+  digitalWrite(LED_BUILTIN, client.isConnected() ? HIGH : LOW);
 
   displayTime();
+
+  if (interval == 0 && nowSeconds % 5 == 0) {
+    float t = dht.getTemperature();
+    float h = dht.getHumidity();
+
+    boolean readSuccessful = dht.getStatus() == DHTesp::ERROR_NONE;
+    if (client.isConnected()) {
+      int nextConnected = readSuccessful ? 2 : 1;
+      if (nextConnected != lastConnected) {
+        Serial.print("set /connected from ");
+        Serial.print(lastConnected);
+        Serial.print(" to ");
+        Serial.println(nextConnected);
+        lastConnected = nextConnected;
+        client.publish(BASIC_TOPIC "connected", String(nextConnected), MQTT_RETAINED);
+      }
+    }
+
+    if (readSuccessful) {
+      float avgT = mkTemp.addMeasurement(t);
+      Serial.print("Temperature in Celsius: ");
+      Serial.print(String(t).c_str());
+      Serial.print(" Average: ");
+      Serial.println(String(avgT).c_str());
+
+      float avgH = mkHum.addMeasurement(h);
+      Serial.print("Humidity    in Percent: ");
+      Serial.print(String(h).c_str());
+      Serial.print(" Average: ");
+      Serial.println(String(avgH).c_str());
+    } else {
+      Serial.print("Failed to read from DHT sensor! ");
+      Serial.println(dht.getStatusString());
+    }
+
+    if (client.isConnected()) {
+      long rssi = WiFi.RSSI();
+      float avgRssi = mkRssi.addMeasurement(rssi);
+      Serial.print("RSSI        in dBm:     ");
+      Serial.print(String(rssi).c_str());
+      Serial.print("   Average: ");
+      Serial.println(String(avgRssi).c_str());
+    }
+  }
 
   if (++interval < INTERVALS) {
     delay(INTERVAL_WAIT);
