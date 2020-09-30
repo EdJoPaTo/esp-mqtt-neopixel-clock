@@ -198,10 +198,6 @@ int interval = 0;
 void loop() {
   client.loop();
 
-  if (timeUnknown) {
-    updateTime();
-  }
-
   displayTime();
 
   if (++interval < INTERVALS) {
@@ -212,6 +208,10 @@ void loop() {
 
     // Update every 5 min -> update on 4:55 so 5:00 will be accurate
     if (nowSeconds % UPDATE_EVERY_SECONDS == UPDATE_EVERY_SECONDS - 5) {
+      timeUnknown = true;
+    }
+
+    if (timeUnknown && client.isConnected()) {
       updateTime();
     } else {
       auto current = millis() % 1000;
