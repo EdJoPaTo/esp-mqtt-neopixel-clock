@@ -27,7 +27,7 @@ EspMQTTClient client(
   1883              // The MQTT port, default to 1883. this line can be omitted
 );
 
-const bool mqtt_retained = true;
+const bool MQTT_RETAINED = true;
 
 #define BASIC_TOPIC CLIENT_NAME "/"
 #define BASIC_TOPIC_SET BASIC_TOPIC "set/"
@@ -81,23 +81,23 @@ void setup() {
 
   // Optional functionnalities of EspMQTTClient
   client.enableDebuggingMessages(); // Enable debugging messages sent to serial output
-  client.enableLastWillMessage(BASIC_TOPIC "connected", "0", mqtt_retained);  // You can activate the retain flag by setting the third parameter to true
+  client.enableLastWillMessage(BASIC_TOPIC "connected", "0", MQTT_RETAINED);
 }
 
 void onConnectionEstablished() {
   client.subscribe(BASIC_TOPIC_SET "bri", [](const String & payload) {
     int value = strtol(payload.c_str(), 0, 10);
     mqttBri = max(1, min(50, value));
-    client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), mqtt_retained);
+    client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
   });
 
   client.subscribe(BASIC_TOPIC_SET "on", [](const String & payload) {
     boolean value = payload != "0";
     on = value;
-    client.publish(BASIC_TOPIC_STATUS "on", String(on), mqtt_retained);
+    client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
   });
 
-  client.publish(BASIC_TOPIC "connected", "2", mqtt_retained);
+  client.publish(BASIC_TOPIC "connected", "2", MQTT_RETAINED);
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
