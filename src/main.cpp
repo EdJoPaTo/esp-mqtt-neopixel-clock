@@ -67,7 +67,7 @@ TimeZone tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Berlin, &berlinProcesso
 static NtpClock ntpClock("fritz.box");
 
 boolean on = true;
-double briFactor = 0.15;
+uint8_t mqttBri = 5;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
@@ -78,7 +78,6 @@ void setup() {
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.clear();
   // strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(100); // Set BRIGHTNESS to about 1/5 (max = 255)
 
   // Optional functionnalities of EspMQTTClient
   client.enableDebuggingMessages(); // Enable debugging messages sent to serial output
@@ -88,32 +87,33 @@ void setup() {
 void onConnectionEstablished() {
   client.subscribe(BASIC_TOPIC_SET "bri", [](const String & payload) {
     int value = strtol(payload.c_str(), 0, 10);
-    briFactor = max(0.02, value / 100.0);
-    client.publish(BASIC_TOPIC_STATUS "bri", payload, mqtt_retained);
+    mqttBri = max(1, min(50, value));
+    client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), mqtt_retained);
   });
 
   client.subscribe(BASIC_TOPIC_SET "on", [](const String & payload) {
     boolean value = payload != "0";
     on = value;
-    client.publish(BASIC_TOPIC_STATUS "on", payload, mqtt_retained);
+    client.publish(BASIC_TOPIC_STATUS "on", String(on), mqtt_retained);
   });
 
   client.publish(BASIC_TOPIC "connected", "2", mqtt_retained);
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
-int rArr[LED_COUNT];
-int gArr[LED_COUNT];
-int bArr[LED_COUNT];
+uint8_t hueArr[LED_COUNT];
+uint8_t satArr[LED_COUNT];
+uint8_t briArr[LED_COUNT];
+const int BASE_BRIGHTNESS_FACTOR = 5;
 
-void setRgb(int clockIndex, int r, int g, int b) {
-  int pixel = (clockIndex + 43) % LED_COUNT;
-  strip.setPixelColor(pixel, strip.Color(r * briFactor, g * briFactor, b * briFactor));
+void setHsv(int clockIndex, uint8_t hue, uint8_t sat, uint8_t bri) {
+  uint16_t pixel = (clockIndex + 43) % LED_COUNT;
+  strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
 }
 
-void initArray(int array[], int length) {
+void initArray(uint8_t array[], int length, uint8_t initValue) {
   for (int i = 0; i < length; i++) {
-    array[i] = 0;
+    array[i] = initValue;
   }
 }
 
@@ -126,34 +126,36 @@ void displayTime() {
     auto minute = tzTime.minute();
     auto second = tzTime.second();
 
-    int hourIn60 = (hour * 60 + minute) * HOUR_EVERY_N_LEDS / LED_COUNT;
+    auto totalMinuteOfHalfDay = (hour * 60) + minute;
+    uint8_t hue = totalMinuteOfHalfDay % 360;
 
-    initArray(rArr, LED_COUNT);
-    initArray(gArr, LED_COUNT);
-    initArray(bArr, LED_COUNT);
+    initArray(hueArr, LED_COUNT, hue);
+    initArray(satArr, LED_COUNT, 100);
+    initArray(briArr, LED_COUNT, mqttBri / BASE_BRIGHTNESS_FACTOR);
 
     // Hourly ticks
     for (int i = 0; i < 12; i++) {
-      gArr[i * HOUR_EVERY_N_LEDS] = 10;
-    }
-
-    // From Hour to Minute
-    for (int i = hourIn60; i < (minute < hourIn60 ? minute + 60 : minute); i++) {
-      bArr[i % 60] = 10;
-    }
-
-    // And back
-    for (int i = minute; i < (hourIn60 < minute ? hourIn60 + 60 : hourIn60); i++) {
-      rArr[i % 60] = 10;
+      briArr[i * HOUR_EVERY_N_LEDS] = mqttBri;
+      if (mqttBri >= BASE_BRIGHTNESS_FACTOR) {
+        satArr[i * HOUR_EVERY_N_LEDS] = 90;
+      }
     }
 
     // clock hands
-    bArr[hourIn60] = 255;
-    rArr[minute] = 255;
-    gArr[second] = 120;
+
+    if (mqttBri >= BASE_BRIGHTNESS_FACTOR) {
+      briArr[minute] = 0;
+      briArr[(minute + 1) % 60] /= 8;
+      briArr[(minute + 59) % 60] /= 8;
+
+      hueArr[second] = (hue + 180) % 360;
+    } else {
+      briArr[minute] = min(255, mqttBri * 5);
+      satArr[minute] = 100;
+    }
 
     for (int i = 0; i < LED_COUNT; i++) {
-      setRgb(i, rArr[i], gArr[i], bArr[i]);
+      setHsv(i, hueArr[i], satArr[i], briArr[i]);
     }
   }
 
