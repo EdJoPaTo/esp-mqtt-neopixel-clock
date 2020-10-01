@@ -110,6 +110,8 @@ void onConnectionEstablished() {
   });
 
   client.publish(BASIC_TOPIC "connected", "1", MQTT_RETAINED);
+  client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
+  client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
   lastConnected = 1;
 }
 
