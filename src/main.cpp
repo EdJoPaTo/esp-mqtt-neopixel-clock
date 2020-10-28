@@ -154,9 +154,10 @@ void displayTime() {
     // clock hands
 
     if (mqttBri >= BASE_BRIGHTNESS_FACTOR) {
-      briArr[(minute + 59) % 60] = 0;
-      briArr[minute] = 0;
-      briArr[(minute + 1) % 60] = 0;
+      for (int i = -2; i <= 2; i++) {
+        uint8_t resulting_minute = (minute + 60 + i) % 60;
+        briArr[resulting_minute] = 0;
+      }
 
       hueArr[second] = (hue + 180) % 360;
     } else {
