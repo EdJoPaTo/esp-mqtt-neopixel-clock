@@ -156,7 +156,9 @@ void displayTime() {
     if (mqttBri >= BASE_BRIGHTNESS_FACTOR) {
       for (int i = -2; i <= 2; i++) {
         uint8_t resulting_minute = (minute + 60 + i) % 60;
-        briArr[resulting_minute] = 0;
+        if (resulting_minute != second) {
+          briArr[resulting_minute] = 0;
+        }
       }
 
       hueArr[second] = (hue + 180) % 360;
