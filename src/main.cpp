@@ -92,6 +92,7 @@ void setup() {
 
   // Optional functionnalities of EspMQTTClient
   client.enableDebuggingMessages(); // Enable debugging messages sent to serial output
+  client.enableHTTPWebUpdater();
   client.enableLastWillMessage(BASIC_TOPIC "connected", "0", MQTT_RETAINED);
 }
 
