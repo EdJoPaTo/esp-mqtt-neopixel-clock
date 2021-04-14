@@ -145,9 +145,14 @@ void displayTime() {
 
     // Hourly ticks
     for (int i = 0; i < 12; i++) {
-      briArr[i * HOUR_EVERY_N_LEDS] = i % 3 == 0 ? mqttBri : mqttBri / 2;
+      auto led = i * HOUR_EVERY_N_LEDS;
+
+      if (mqttBri < BASE_BRIGHTNESS_FACTOR || led != second) {
+        briArr[led] = i % 3 == 0 ? mqttBri : mqttBri / 2;
+      }
+
       if (mqttBri >= BASE_BRIGHTNESS_FACTOR) {
-        satArr[i * HOUR_EVERY_N_LEDS] = 90;
+        satArr[led] = 90;
       }
     }
 
