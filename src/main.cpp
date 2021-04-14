@@ -10,6 +10,7 @@
 
 #include <AceTime.h>
 #include <Adafruit_NeoPixel.h>
+#include <credentials.h>
 #include <DHTesp.h>
 #include <EspMQTTClient.h>
 #include <MqttKalmanPublish.h>
@@ -20,13 +21,11 @@ using namespace ace_time::clock;
 #define CLIENT_NAME "espNeopixelClock"
 
 EspMQTTClient client(
-  "WifiSSID",
-  "WifiPassword",
-  "192.168.1.100",  // MQTT Broker server ip
-  "MQTTUsername",   // Can be omitted if not needed
-  "MQTTPassword",   // Can be omitted if not needed
-  CLIENT_NAME,     // Client name that uniquely identify your device
-  1883              // The MQTT port, default to 1883. this line can be omitted
+  WIFI_SSID,
+  WIFI_PASSWORD,
+  MQTT_SERVER,
+  CLIENT_NAME,
+  1883
 );
 
 const bool MQTT_RETAINED = true;
