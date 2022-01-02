@@ -8,7 +8,7 @@
 //   a LOGIC-LEVEL CONVERTER on the data line is STRONGLY RECOMMENDED.
 // (Skipping these may work OK on your workbench but can fail in the field)
 
-#include <AceTime.h>
+#include <AceTimeClock.h>
 #include <Adafruit_NeoPixel.h>
 #include <credentials.h>
 #include <DHTesp.h>
@@ -19,26 +19,24 @@ using namespace ace_time;
 using namespace ace_time::clock;
 
 #define CLIENT_NAME "espNeopixelClock"
+const bool MQTT_RETAINED = true;
 
 EspMQTTClient client(
-  WIFI_SSID,
-  WIFI_PASSWORD,
-  MQTT_SERVER,
-  CLIENT_NAME,
-  1883
-);
-
-const bool MQTT_RETAINED = true;
-int lastConnected = 0;
+    WIFI_SSID,
+    WIFI_PASSWORD,
+    MQTT_SERVER,
+    MQTT_USERNAME,
+    MQTT_PASSWORD,
+    CLIENT_NAME,
+    1883);
 
 #define BASIC_TOPIC CLIENT_NAME "/"
 #define BASIC_TOPIC_SET BASIC_TOPIC "set/"
 #define BASIC_TOPIC_STATUS BASIC_TOPIC "status/"
 
-
 // Which pin is connected to the NeoPixels?
 const int LED_PIN = 13; // D7
-const int DHTPIN = 12; // D6
+const int DHTPIN = 12;  // D6
 
 // How many NeoPixels are attached?
 const int LED_COUNT = 60;
@@ -75,35 +73,35 @@ static BasicZoneProcessor berlinProcessor;
 TimeZone tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Berlin, &berlinProcessor);
 static NtpClock ntpClock("fritz.box");
 
+int lastConnected = 0;
 boolean on = true;
 uint8_t mqttBri = 1;
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(115200);
 
   ntpClock.setup();
 
-  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
+  strip.begin();
   strip.clear();
-  // strip.show();            // Turn OFF all pixels ASAP
 
   dht.setup(DHTPIN, DHTesp::DHT22);
 
-  // Optional functionnalities of EspMQTTClient
-  client.enableDebuggingMessages(); // Enable debugging messages sent to serial output
+  client.enableDebuggingMessages();
   client.enableHTTPWebUpdater();
+  client.enableOTA();
   client.enableLastWillMessage(BASIC_TOPIC "connected", "0", MQTT_RETAINED);
 }
 
 void onConnectionEstablished() {
-  client.subscribe(BASIC_TOPIC_SET "bri", [](const String & payload) {
+  client.subscribe(BASIC_TOPIC_SET "bri", [](const String &payload) {
     int value = strtol(payload.c_str(), 0, 10);
     mqttBri = max(1, min(50, value));
     client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
   });
 
-  client.subscribe(BASIC_TOPIC_SET "on", [](const String & payload) {
+  client.subscribe(BASIC_TOPIC_SET "on", [](const String &payload) {
     boolean value = payload != "0";
     on = value;
     client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
@@ -216,10 +214,6 @@ const int INTERVAL_WAIT = 1000 / INTERVALS;
 int interval = 0;
 
 void loop() {
-  if (!client.isConnected()) {
-    lastConnected = 0;
-  }
-
   client.loop();
   digitalWrite(LED_BUILTIN, client.isConnected() ? HIGH : LOW);
 
