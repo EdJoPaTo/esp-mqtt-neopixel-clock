@@ -58,7 +58,7 @@ const int HOUR = 60 * MINUTE;
 
 const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
 
-const int UPDATE_EVERY_SECONDS = 5 * MINUTE;
+const acetime_t UPDATE_TIME_EVERY_SECONDS = 5 * MINUTE;
 
 DHTesp dht;
 
@@ -66,9 +66,8 @@ MQTTKalmanPublish mkTemp(client, BASIC_TOPIC_STATUS "temp", MQTT_RETAINED, 12 * 
 MQTTKalmanPublish mkHum(client, BASIC_TOPIC_STATUS "hum", MQTT_RETAINED, 12 * 5 /* every 5 min */, 2);
 MQTTKalmanPublish mkRssi(client, BASIC_TOPIC_STATUS "rssi", MQTT_RETAINED, 12 * 5 /* every 5 min */, 10);
 
-int32_t nowSeconds = 0;
-int referenceMillis = 0;
-boolean timeUnknown = true;
+acetime_t epochSecondsOnUpdate = 0;
+unsigned long referenceMillis = 0;
 static BasicZoneProcessor berlinProcessor;
 TimeZone tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Berlin, &berlinProcessor);
 static NtpClock ntpClock("fritz.box");
@@ -127,17 +126,26 @@ void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
   strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
 }
 
-void displayTime() {
+void displayTime(acetime_t epochSeconds) {
+  // Dont update when time / mqtt is not initialized yet
+  if (epochSecondsOnUpdate == 0 || !client.isConnected()) {
+    return;
+  }
+
   strip.clear();
 
   if (on) {
-    auto tzTime = ZonedDateTime::forEpochSeconds(nowSeconds, tz);
-    auto hour = tzTime.hour() % 12;
+    auto tzTime = ZonedDateTime::forEpochSeconds(epochSeconds, tz);
+    auto hour = tzTime.hour();
     auto minute = tzTime.minute();
     auto second = tzTime.second();
 
-    auto totalMinuteOfHalfDay = (hour * 60) + minute;
-    uint16_t hue = totalMinuteOfHalfDay % 360;
+    auto minuteOfDay = (hour * 60) + minute;
+    uint16_t hue = minuteOfDay % 360;
+
+    Serial.printf(
+        "displayTime %2d:%02d:%02d  hue %3d  at %3ld (ideal: %3ld)\n",
+        hour, minute, second, hue, millis() % 1000, referenceMillis % 1000);
 
     for (int i = 0; i < LED_COUNT; i++) {
       hueArr[i] = hue;
@@ -182,44 +190,40 @@ void displayTime() {
   strip.show();
 }
 
-void updateTime() {
+/// Update `epochSecondsOnUpdate` via NTP. Returns true on success.
+bool updateTime() {
   auto start = millis();
   auto first = ntpClock.getNow();
   if (first == LocalDate::kInvalidEpochSeconds) {
-    return;
+    return false;
   }
 
-  int32_t second = first;
-  int32_t tmp;
-  while (second == first) {
-    delay(20);
-
-    tmp = ntpClock.getNow();
-    if (tmp != LocalDate::kInvalidEpochSeconds) {
-      second = tmp;
+  acetime_t second;
+  size_t attempt = 0;
+  do {
+    if (attempt++ > 50) {
+      return false;
     }
-  }
+    delay(20);
+    second = ntpClock.getNow();
+  } while (second <= first || second == LocalDate::kInvalidEpochSeconds);
 
-  referenceMillis = millis() % 1000;
-  nowSeconds = second;
-  timeUnknown = false;
+  referenceMillis = millis();
+  epochSecondsOnUpdate = second;
 
-  auto took = millis() - start;
-
-  Serial.printf("updateTime finished at %d and took %ldms\n", referenceMillis, took);
+  auto took = referenceMillis - start;
+  Serial.printf("updateTime finished at %3ld and took %ldms\n", referenceMillis % 1000, took);
+  return true;
 }
-
-const int INTERVALS = 4;
-const int INTERVAL_WAIT = 1000 / INTERVALS;
-int interval = 0;
 
 void loop() {
   client.loop();
   digitalWrite(LED_BUILTIN, client.isConnected() ? HIGH : LOW);
 
-  displayTime();
+  static unsigned long nextMeasure = 0;
+  if (millis() >= nextMeasure) {
+    nextMeasure = millis() + 5000; // every 5 seconds
 
-  if (interval == 0 && nowSeconds % 5 == 0) {
     float t = dht.getTemperature();
     float h = dht.getHumidity();
 
@@ -251,27 +255,30 @@ void loop() {
     }
   }
 
-  if (++interval < INTERVALS) {
-    delay(INTERVAL_WAIT);
+  // Update time when old
+  bool doTimeUpdate = epochSecondsOnUpdate == 0 || millis() >= referenceMillis + UPDATE_TIME_EVERY_SECONDS * 1000;
+  if (doTimeUpdate && updateTime()) {
+    displayTime(epochSecondsOnUpdate);
+    delay(100);
+  }
+
+  auto current = millis() % 1000;
+  auto distance = (referenceMillis - current) % 1000;
+
+  if (distance > 10) {
+    delay(7);
   } else {
-    nowSeconds++;
-    interval = 0;
+    delay(distance);
+
+    auto ago = millis() - referenceMillis;
+    acetime_t epochSeconds = epochSecondsOnUpdate + (ago / 1000);
+    displayTime(epochSeconds);
 
     // Update every 5 min -> update on 4:55 so 5:00 will be accurate
-    if (nowSeconds % UPDATE_EVERY_SECONDS == UPDATE_EVERY_SECONDS - 5) {
-      timeUnknown = true;
+    if (epochSeconds % UPDATE_TIME_EVERY_SECONDS == UPDATE_TIME_EVERY_SECONDS - 5 && updateTime()) {
+      displayTime(epochSecondsOnUpdate);
     }
 
-    if (timeUnknown && client.isConnected()) {
-      updateTime();
-    } else {
-      auto current = millis() % 1000;
-      auto distance = (1000 + referenceMillis - current) % 1000;
-      delay(distance);
-    }
-
-    Serial.printf(
-        "now %2d at %3ld (ideal: %3d)\n",
-        nowSeconds % 60, now % 1000, referenceMillis);
+    delay(50);
   }
 }
