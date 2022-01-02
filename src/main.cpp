@@ -56,8 +56,6 @@ const int SECOND = 1;
 const int MINUTE = 60 * SECOND;
 const int HOUR = 60 * MINUTE;
 
-const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
-
 const acetime_t UPDATE_TIME_EVERY_SECONDS = 5 * MINUTE;
 
 DHTesp dht;
@@ -117,10 +115,6 @@ void onConnectionEstablished() {
   lastConnected = 1;
 }
 
-uint16_t hueArr[LED_COUNT];
-uint8_t satArr[LED_COUNT];
-uint8_t briArr[LED_COUNT];
-
 void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
   uint16_t pixel = (clockIndex + 43) % LED_COUNT;
   strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
@@ -147,6 +141,9 @@ void displayTime(acetime_t epochSeconds) {
         "displayTime %2d:%02d:%02d  hue %3d  at %3ld (ideal: %3ld)\n",
         hour, minute, second, hue, millis() % 1000, referenceMillis % 1000);
 
+    uint16_t hueArr[LED_COUNT];
+    uint8_t satArr[LED_COUNT];
+    uint8_t briArr[LED_COUNT];
     for (int i = 0; i < LED_COUNT; i++) {
       hueArr[i] = hue;
       satArr[i] = 100;
@@ -154,6 +151,7 @@ void displayTime(acetime_t epochSeconds) {
     }
 
     // Hourly ticks
+    const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
     for (int i = 0; i < 12; i++) {
       auto led = i * HOUR_EVERY_N_LEDS;
 
