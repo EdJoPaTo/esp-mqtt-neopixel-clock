@@ -257,7 +257,7 @@ void loop() {
       Serial.println(dht.getStatusString());
     }
 
-    if (client.isConnected()) {
+    if (client.isWifiConnected()) {
       long rssi = WiFi.RSSI();
       float avgRssi = mkRssi.addMeasurement(rssi);
       Serial.print("RSSI        in dBm:     ");
