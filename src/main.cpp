@@ -206,11 +206,7 @@ void updateTime() {
 
   auto took = millis() - start;
 
-  Serial.print("updateTime finished at ");
-  Serial.print(referenceMillis);
-  Serial.print(" and took ");
-  Serial.print(took);
-  Serial.println("ms");
+  Serial.printf("updateTime finished at %d and took %ldms\n", referenceMillis, took);
 }
 
 const int INTERVALS = 4;
@@ -231,10 +227,7 @@ void loop() {
     if (client.isConnected()) {
       int nextConnected = readSuccessful ? 2 : 1;
       if (nextConnected != lastConnected) {
-        Serial.print("set /connected from ");
-        Serial.print(lastConnected);
-        Serial.print(" to ");
-        Serial.println(nextConnected);
+        Serial.printf("set /connected from %d to %d\n", lastConnected, nextConnected);
         lastConnected = nextConnected;
         client.publish(BASIC_TOPIC "connected", String(nextConnected), MQTT_RETAINED);
       }
@@ -242,16 +235,10 @@ void loop() {
 
     if (readSuccessful) {
       float avgT = mkTemp.addMeasurement(t);
-      Serial.print("Temperature in Celsius: ");
-      Serial.print(String(t).c_str());
-      Serial.print(" Average: ");
-      Serial.println(String(avgT).c_str());
+      Serial.printf("Temperature in Celsius: %5.1f Average: %6.2f\n", t, avgT);
 
       float avgH = mkHum.addMeasurement(h);
-      Serial.print("Humidity    in Percent: ");
-      Serial.print(String(h).c_str());
-      Serial.print(" Average: ");
-      Serial.println(String(avgH).c_str());
+      Serial.printf("Humidity    in Percent: %5.1f Average: %6.2f\n", h, avgH);
     } else {
       Serial.print("Failed to read from DHT sensor! ");
       Serial.println(dht.getStatusString());
@@ -260,10 +247,7 @@ void loop() {
     if (client.isWifiConnected()) {
       long rssi = WiFi.RSSI();
       float avgRssi = mkRssi.addMeasurement(rssi);
-      Serial.print("RSSI        in dBm:     ");
-      Serial.print(String(rssi).c_str());
-      Serial.print("   Average: ");
-      Serial.println(String(avgRssi).c_str());
+      Serial.printf("RSSI        in     dBm: %5ld Average: %6.2f\n", rssi, avgRssi);
     }
   }
 
@@ -286,9 +270,8 @@ void loop() {
       delay(distance);
     }
 
-    Serial.print("now ");
-    Serial.print(nowSeconds % 60);
-    Serial.print(" at ");
-    Serial.println(millis() % 1000);
+    Serial.printf(
+        "now %2d at %3ld (ideal: %3d)\n",
+        nowSeconds % 60, now % 1000, referenceMillis);
   }
 }
