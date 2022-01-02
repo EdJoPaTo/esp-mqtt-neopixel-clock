@@ -76,6 +76,8 @@ static NtpClock ntpClock("fritz.box");
 int lastConnected = 0;
 boolean on = true;
 uint8_t mqttBri = 1;
+const int BRIGHTNESS_FACTOR = 5;
+const uint8_t MAX_BACKGROUND_OFF_BRIGHTNESS = 4;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -85,6 +87,7 @@ void setup() {
 
   strip.begin();
   strip.clear();
+  strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
 
   dht.setup(DHTPIN, DHTesp::DHT22);
 
@@ -97,13 +100,15 @@ void setup() {
 void onConnectionEstablished() {
   client.subscribe(BASIC_TOPIC_SET "bri", [](const String &payload) {
     int value = strtol(payload.c_str(), 0, 10);
-    mqttBri = max(1, min(50, value));
+    mqttBri = max(1, min(255 / BRIGHTNESS_FACTOR, value));
+    strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
     client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
   });
 
   client.subscribe(BASIC_TOPIC_SET "on", [](const String &payload) {
     boolean value = payload != "0";
     on = value;
+    strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
     client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
   });
 
@@ -116,7 +121,6 @@ void onConnectionEstablished() {
 uint16_t hueArr[LED_COUNT];
 uint8_t satArr[LED_COUNT];
 uint8_t briArr[LED_COUNT];
-const int BASE_BRIGHTNESS_FACTOR = 6;
 
 void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
   uint16_t pixel = (clockIndex + 43) % LED_COUNT;
@@ -138,25 +142,25 @@ void displayTime() {
     for (int i = 0; i < LED_COUNT; i++) {
       hueArr[i] = hue;
       satArr[i] = 100;
-      briArr[i] = mqttBri / BASE_BRIGHTNESS_FACTOR;
+      briArr[i] = 255 / 20;
     }
 
     // Hourly ticks
     for (int i = 0; i < 12; i++) {
       auto led = i * HOUR_EVERY_N_LEDS;
 
-      if (mqttBri < BASE_BRIGHTNESS_FACTOR || led != second) {
-        briArr[led] = i % 3 == 0 ? mqttBri : mqttBri / 2;
+      if (mqttBri <= MAX_BACKGROUND_OFF_BRIGHTNESS || led != second) {
+        briArr[led] = i % 3 == 0 ? 255 / 5 : 255 / 10;
       }
 
-      if (mqttBri >= BASE_BRIGHTNESS_FACTOR) {
-        satArr[led] = 90;
+      if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
+        satArr[led] = 75;
       }
     }
 
     // clock hands
 
-    if (mqttBri >= BASE_BRIGHTNESS_FACTOR) {
+    if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
       for (int i = -2; i <= 2; i++) {
         uint8_t resulting_minute = (minute + 60 + i) % 60;
         if (resulting_minute != second) {
@@ -166,7 +170,7 @@ void displayTime() {
 
       hueArr[second] = (hue + 180) % 360;
     } else {
-      briArr[minute] = min(255, mqttBri * 5);
+      briArr[minute] = 255;
       satArr[minute] = 100;
     }
 
