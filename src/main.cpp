@@ -257,13 +257,15 @@ void loop() {
   bool doTimeUpdate = epochSecondsOnUpdate == 0 || millis() >= referenceMillis + UPDATE_TIME_EVERY_SECONDS * 1000;
   if (doTimeUpdate && updateTime()) {
     displayTime(epochSecondsOnUpdate);
-    delay(100);
+    delay(50);
   }
 
   auto current = millis() % 1000;
   auto distance = (referenceMillis - current) % 1000;
 
-  if (distance > 10) {
+  // If there is much time left, let others use it
+  // Otherwise make sure the clock will be updated on time
+  if (distance > 200) {
     delay(7);
   } else {
     delay(distance);
