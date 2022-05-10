@@ -31,3 +31,7 @@ The complementary color dot is in the upper left corner at :53.
 So the time shown is 10:40:53.
 At first this takes a bit of time to read the clock.
 This gets fairly simple when being used to it.
+
+## Alternatives
+
+- [chrismelba/lightclockwifiv2](https://github.com/chrismelba/lightclockwifiv2)
