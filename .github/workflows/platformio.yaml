@@ -1,0 +1,35 @@
+name: PlatformIO
+
+on:
+  push:
+  pull_request:
+  # Build regularly in order to check for new dependency versions
+  schedule:
+    - cron: '42 2 * * 6' # weekly on Saturday 2:42 UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: fake credentials.h
+        run: |
+          mkdir -p ~/.platformio/lib/Credentials
+          export file=~/.platformio/lib/Credentials/credentials.h
+
+          echo "#pragma once" > $file
+
+          echo '#define WIFI_SSID ""' >> $file
+          echo '#define WIFI_PASSWORD ""' >> $file
+
+          echo '#define MQTT_SERVER ""' >> $file
+          echo '#define MQTT_USERNAME NULL' >> $file
+          echo '#define MQTT_PASSWORD NULL' >> $file
+
+          cat $file
+
+      - name: PlatformIO Build
+        uses: karniv00l/platformio-run-action@0.1.0
+
+      # No need to upload this as it contains fake credentials anyway
