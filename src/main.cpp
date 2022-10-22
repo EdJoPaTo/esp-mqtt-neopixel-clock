@@ -8,15 +8,13 @@
 //   a LOGIC-LEVEL CONVERTER on the data line is STRONGLY RECOMMENDED.
 // (Skipping these may work OK on your workbench but can fail in the field)
 
-#include <AceTimeClock.h>
 #include <Adafruit_NeoPixel.h>
 #include <credentials.h>
 #include <DHTesp.h>
 #include <EspMQTTClient.h>
 #include <MqttKalmanPublish.h>
 
-using namespace ace_time;
-using namespace ace_time::clock;
+#include "localtime.h"
 
 #define CLIENT_NAME "espNeopixelClock"
 const bool MQTT_RETAINED = true;
@@ -52,23 +50,11 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 //   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
 //   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
 
-const int SECOND = 1;
-const int MINUTE = 60 * SECOND;
-const int HOUR = 60 * MINUTE;
-
-const acetime_t UPDATE_TIME_EVERY_SECONDS = 5 * MINUTE;
-
 DHTesp dht;
 
 MQTTKalmanPublish mkTemp(client, BASIC_TOPIC_STATUS "temp", MQTT_RETAINED, 12 * 2 /* every 2 min */, 0.2);
 MQTTKalmanPublish mkHum(client, BASIC_TOPIC_STATUS "hum", MQTT_RETAINED, 12 * 5 /* every 5 min */, 2);
 MQTTKalmanPublish mkRssi(client, BASIC_TOPIC_STATUS "rssi", MQTT_RETAINED, 12 * 5 /* every 5 min */, 10);
-
-acetime_t epochSecondsOnUpdate = 0;
-unsigned long referenceMillis = 0;
-static BasicZoneProcessor berlinProcessor;
-TimeZone tz = TimeZone::forZoneInfo(&zonedb::kZoneEurope_Berlin, &berlinProcessor);
-static NtpClock ntpClock("fritz.box");
 
 int lastConnected = 0;
 boolean on = true;
@@ -79,8 +65,6 @@ const uint8_t MAX_BACKGROUND_OFF_BRIGHTNESS = 4;
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(115200);
-
-  ntpClock.setup();
 
   strip.begin();
   strip.clear();
@@ -121,16 +105,16 @@ void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
   strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
 }
 
-void displayTime(acetime_t epochSeconds) {
+void displayTime() {
   // Dont update when time / mqtt is not initialized yet
-  if (epochSecondsOnUpdate == 0 || !client.isConnected()) {
-    return;
-  }
+	if (!localtime_known() || !client.isConnected()) {
+		return;
+	}
 
   strip.clear();
 
   if (on) {
-    auto tzTime = ZonedDateTime::forEpochSeconds(epochSeconds, tz);
+		auto tzTime = localtime_getDateTime();
     auto hour = tzTime.hour();
     auto minute = tzTime.minute();
     auto second = tzTime.second();
@@ -189,32 +173,6 @@ void displayTime(acetime_t epochSeconds) {
   strip.show();
 }
 
-/// Update `epochSecondsOnUpdate` via NTP. Returns true on success.
-bool updateTime() {
-  auto start = millis();
-  auto first = ntpClock.getNow();
-  if (first == LocalDate::kInvalidEpochSeconds) {
-    return false;
-  }
-
-  acetime_t second;
-  size_t attempt = 0;
-  do {
-    if (attempt++ > 50) {
-      return false;
-    }
-    delay(20);
-    second = ntpClock.getNow();
-  } while (second <= first || second == LocalDate::kInvalidEpochSeconds);
-
-  referenceMillis = millis();
-  epochSecondsOnUpdate = second;
-
-  auto took = referenceMillis - start;
-  Serial.printf("updateTime finished at %3ld and took %ldms\n", referenceMillis % 1000, took);
-  return true;
-}
-
 void loop() {
   client.loop();
   digitalWrite(LED_BUILTIN, client.isConnected() ? HIGH : LOW);
@@ -254,32 +212,22 @@ void loop() {
     }
   }
 
-  // Update time when old
-  bool doTimeUpdate = epochSecondsOnUpdate == 0 || millis() >= referenceMillis + UPDATE_TIME_EVERY_SECONDS * 1000;
-  if (doTimeUpdate && updateTime()) {
-    displayTime(epochSecondsOnUpdate);
-    delay(50);
-  }
+	if (client.isWifiConnected() && localtime_updateNeeded() && localtime_update()) {
+		// update successful
+    displayTime();
+	}
 
-  auto current = millis() % 1000;
-  auto distance = (referenceMillis - current) % 1000;
+	if (localtime_known()) {
+		auto distance = localtime_millisUntilNextSecond();
 
-  // If there is much time left, let others use it
-  // Otherwise make sure the clock will be updated on time
-  if (distance > 200) {
-    delay(7);
-  } else {
-    delay(distance);
-
-    auto ago = millis() - referenceMillis;
-    acetime_t epochSeconds = epochSecondsOnUpdate + (ago / 1000);
-    displayTime(epochSeconds);
-
-    // Update every 5 min -> update on 4:55 so 5:00 will be accurate
-    if (epochSeconds % UPDATE_TIME_EVERY_SECONDS == UPDATE_TIME_EVERY_SECONDS - 5 && updateTime()) {
-      displayTime(epochSecondsOnUpdate);
-    }
-
-    delay(50);
-  }
+		// If there is much time left, let others use it
+		// Otherwise make sure the clock will be updated on time
+		if (distance > 200) {
+			delay(7);
+		} else {
+			delay(distance);
+			displayTime();
+			delay(50);
+		}
+	}
 }
