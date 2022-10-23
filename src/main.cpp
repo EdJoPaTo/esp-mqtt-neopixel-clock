@@ -106,11 +106,6 @@ void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
 }
 
 void displayTime() {
-	// Dont update when time / mqtt is not initialized yet
-	if (!localtime_isKnown() || !client.isConnected()) {
-		return;
-	}
-
 	strip.clear();
 
 	if (on) {
