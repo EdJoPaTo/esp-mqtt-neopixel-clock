@@ -20,13 +20,13 @@
 const bool MQTT_RETAINED = true;
 
 EspMQTTClient client(
-    WIFI_SSID,
-    WIFI_PASSWORD,
-    MQTT_SERVER,
-    MQTT_USERNAME,
-    MQTT_PASSWORD,
-    CLIENT_NAME,
-    1883);
+		WIFI_SSID,
+		WIFI_PASSWORD,
+		MQTT_SERVER,
+		MQTT_USERNAME,
+		MQTT_PASSWORD,
+		CLIENT_NAME,
+		1883);
 
 #define BASIC_TOPIC CLIENT_NAME "/"
 #define BASIC_TOPIC_SET BASIC_TOPIC "set/"
@@ -63,158 +63,158 @@ const int BRIGHTNESS_FACTOR = 5;
 const uint8_t MAX_BACKGROUND_OFF_BRIGHTNESS = 4;
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-  Serial.begin(115200);
+	pinMode(LED_BUILTIN, OUTPUT);
+	Serial.begin(115200);
 
-  strip.begin();
-  strip.clear();
-  strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
+	strip.begin();
+	strip.clear();
+	strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
 
-  dht.setup(DHTPIN, DHTesp::DHT22);
+	dht.setup(DHTPIN, DHTesp::DHT22);
 
-  client.enableDebuggingMessages();
-  client.enableHTTPWebUpdater();
-  client.enableOTA();
-  client.enableLastWillMessage(BASIC_TOPIC "connected", "0", MQTT_RETAINED);
+	client.enableDebuggingMessages();
+	client.enableHTTPWebUpdater();
+	client.enableOTA();
+	client.enableLastWillMessage(BASIC_TOPIC "connected", "0", MQTT_RETAINED);
 }
 
 void onConnectionEstablished() {
-  client.subscribe(BASIC_TOPIC_SET "bri", [](const String &payload) {
-    int value = strtol(payload.c_str(), 0, 10);
-    mqttBri = max(1, min(255 / BRIGHTNESS_FACTOR, value));
-    strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
-    client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
-  });
+	client.subscribe(BASIC_TOPIC_SET "bri", [](const String &payload) {
+		int value = strtol(payload.c_str(), 0, 10);
+		mqttBri = max(1, min(255 / BRIGHTNESS_FACTOR, value));
+		strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
+		client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
+	});
 
-  client.subscribe(BASIC_TOPIC_SET "on", [](const String &payload) {
-    boolean value = payload != "0";
-    on = value;
-    strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
-    client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
-  });
+	client.subscribe(BASIC_TOPIC_SET "on", [](const String &payload) {
+		boolean value = payload != "0";
+		on = value;
+		strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
+		client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
+	});
 
-  client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
-  client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
-  client.publish(BASIC_TOPIC "git-version", GIT_VERSION, MQTT_RETAINED);
-  client.publish(BASIC_TOPIC "connected", "1", MQTT_RETAINED);
-  lastConnected = 1;
+	client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
+	client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
+	client.publish(BASIC_TOPIC "git-version", GIT_VERSION, MQTT_RETAINED);
+	client.publish(BASIC_TOPIC "connected", "1", MQTT_RETAINED);
+	lastConnected = 1;
 }
 
 void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
-  uint16_t pixel = (clockIndex + 43) % LED_COUNT;
-  strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
+	uint16_t pixel = (clockIndex + 43) % LED_COUNT;
+	strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
 }
 
 void displayTime() {
-  // Dont update when time / mqtt is not initialized yet
+	// Dont update when time / mqtt is not initialized yet
 	if (!localtime_isKnown() || !client.isConnected()) {
 		return;
 	}
 
-  strip.clear();
+	strip.clear();
 
-  if (on) {
+	if (on) {
 		auto tzTime = localtime_getDateTime();
-    auto hour = tzTime.hour();
-    auto minute = tzTime.minute();
-    auto second = tzTime.second();
+		auto hour = tzTime.hour();
+		auto minute = tzTime.minute();
+		auto second = tzTime.second();
 
-    auto minuteOfDay = (hour * 60) + minute;
-    uint16_t hue = minuteOfDay % 360;
+		auto minuteOfDay = (hour * 60) + minute;
+		uint16_t hue = minuteOfDay % 360;
 
-    Serial.printf(
-        "displayTime %2d:%02d:%02d  hue %3d  at %3ld (ideal: %3ld)\n",
-        hour, minute, second, hue, millis() % 1000, referenceMillis % 1000);
+		Serial.printf(
+				"displayTime %2d:%02d:%02d  hue %3d  at %3ld (ideal: %3ld)\n",
+				hour, minute, second, hue, millis() % 1000, referenceMillis % 1000);
 
-    uint16_t hueArr[LED_COUNT];
-    uint8_t satArr[LED_COUNT];
-    uint8_t briArr[LED_COUNT];
-    for (int i = 0; i < LED_COUNT; i++) {
-      hueArr[i] = hue;
-      satArr[i] = 100;
-      briArr[i] = 255 / 20;
-    }
+		uint16_t hueArr[LED_COUNT];
+		uint8_t satArr[LED_COUNT];
+		uint8_t briArr[LED_COUNT];
+		for (int i = 0; i < LED_COUNT; i++) {
+			hueArr[i] = hue;
+			satArr[i] = 100;
+			briArr[i] = 255 / 20;
+		}
 
-    // Hourly ticks
-    const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
-    for (int i = 0; i < 12; i++) {
-      auto led = i * HOUR_EVERY_N_LEDS;
+		// Hourly ticks
+		const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
+		for (int i = 0; i < 12; i++) {
+			auto led = i * HOUR_EVERY_N_LEDS;
 
-      if (mqttBri <= MAX_BACKGROUND_OFF_BRIGHTNESS || led != second) {
-        briArr[led] = i % 3 == 0 ? 255 / 5 : 255 / 10;
-      }
+			if (mqttBri <= MAX_BACKGROUND_OFF_BRIGHTNESS || led != second) {
+				briArr[led] = i % 3 == 0 ? 255 / 5 : 255 / 10;
+			}
 
-      if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
-        satArr[led] = 75;
-      }
-    }
+			if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
+				satArr[led] = 75;
+			}
+		}
 
-    // clock hands
+		// clock hands
 
-    if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
-      for (int i = -2; i <= 2; i++) {
-        uint8_t resulting_minute = (minute + 60 + i) % 60;
-        if (resulting_minute != second) {
-          briArr[resulting_minute] = 0;
-        }
-      }
+		if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
+			for (int i = -2; i <= 2; i++) {
+				uint8_t resulting_minute = (minute + 60 + i) % 60;
+				if (resulting_minute != second) {
+					briArr[resulting_minute] = 0;
+				}
+			}
 
-      hueArr[second] = (hue + 180) % 360;
-    } else {
-      briArr[minute] = 255;
-      satArr[minute] = 100;
-    }
+			hueArr[second] = (hue + 180) % 360;
+		} else {
+			briArr[minute] = 255;
+			satArr[minute] = 100;
+		}
 
-    for (int i = 0; i < LED_COUNT; i++) {
-      setHsv(i, hueArr[i], satArr[i], briArr[i]);
-    }
-  }
+		for (int i = 0; i < LED_COUNT; i++) {
+			setHsv(i, hueArr[i], satArr[i], briArr[i]);
+		}
+	}
 
-  strip.show();
+	strip.show();
 }
 
 void loop() {
-  client.loop();
-  digitalWrite(LED_BUILTIN, client.isConnected() ? HIGH : LOW);
+	client.loop();
+	digitalWrite(LED_BUILTIN, client.isConnected() ? HIGH : LOW);
 
-  static unsigned long nextMeasure = 0;
-  if (millis() >= nextMeasure) {
-    nextMeasure = millis() + 5000; // every 5 seconds
+	static unsigned long nextMeasure = 0;
+	if (millis() >= nextMeasure) {
+		nextMeasure = millis() + 5000; // every 5 seconds
 
-    float t = dht.getTemperature();
-    float h = dht.getHumidity();
+		float t = dht.getTemperature();
+		float h = dht.getHumidity();
 
-    boolean readSuccessful = dht.getStatus() == DHTesp::ERROR_NONE;
-    if (client.isConnected()) {
-      int nextConnected = readSuccessful ? 2 : 1;
-      if (nextConnected != lastConnected) {
-        Serial.printf("set /connected from %d to %d\n", lastConnected, nextConnected);
-        lastConnected = nextConnected;
-        client.publish(BASIC_TOPIC "connected", String(nextConnected), MQTT_RETAINED);
-      }
-    }
+		boolean readSuccessful = dht.getStatus() == DHTesp::ERROR_NONE;
+		if (client.isConnected()) {
+			int nextConnected = readSuccessful ? 2 : 1;
+			if (nextConnected != lastConnected) {
+				Serial.printf("set /connected from %d to %d\n", lastConnected, nextConnected);
+				lastConnected = nextConnected;
+				client.publish(BASIC_TOPIC "connected", String(nextConnected), MQTT_RETAINED);
+			}
+		}
 
-    if (readSuccessful) {
-      float avgT = mkTemp.addMeasurement(t);
-      Serial.printf("Temperature in Celsius: %5.1f Average: %6.2f\n", t, avgT);
+		if (readSuccessful) {
+			float avgT = mkTemp.addMeasurement(t);
+			Serial.printf("Temperature in Celsius: %5.1f Average: %6.2f\n", t, avgT);
 
-      float avgH = mkHum.addMeasurement(h);
-      Serial.printf("Humidity    in Percent: %5.1f Average: %6.2f\n", h, avgH);
-    } else {
-      Serial.print("Failed to read from DHT sensor! ");
-      Serial.println(dht.getStatusString());
-    }
+			float avgH = mkHum.addMeasurement(h);
+			Serial.printf("Humidity    in Percent: %5.1f Average: %6.2f\n", h, avgH);
+		} else {
+			Serial.print("Failed to read from DHT sensor! ");
+			Serial.println(dht.getStatusString());
+		}
 
-    if (client.isWifiConnected()) {
-      long rssi = WiFi.RSSI();
-      float avgRssi = mkRssi.addMeasurement(rssi);
-      Serial.printf("RSSI        in     dBm: %5ld Average: %6.2f\n", rssi, avgRssi);
-    }
-  }
+		if (client.isWifiConnected()) {
+			long rssi = WiFi.RSSI();
+			float avgRssi = mkRssi.addMeasurement(rssi);
+			Serial.printf("RSSI        in     dBm: %5ld Average: %6.2f\n", rssi, avgRssi);
+		}
+	}
 
 	if (client.isWifiConnected() && localtime_updateNeeded() && localtime_update()) {
 		// update successful
-    displayTime();
+		displayTime();
 	}
 
 	if (localtime_isKnown()) {
