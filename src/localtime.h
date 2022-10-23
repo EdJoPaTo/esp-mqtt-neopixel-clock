@@ -11,7 +11,7 @@ acetime_t epochSecondsOnUpdate = 0;
 unsigned long referenceMillis = 0;
 static NtpClock ntpClock("fritz.box");
 
-bool localtime_known() { return epochSecondsOnUpdate > 0; }
+bool localtime_isKnown() { return epochSecondsOnUpdate > 0; }
 
 acetime_t localtime_getEpochSeconds()
 {

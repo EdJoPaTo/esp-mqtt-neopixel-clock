@@ -107,7 +107,7 @@ void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
 
 void displayTime() {
   // Dont update when time / mqtt is not initialized yet
-	if (!localtime_known() || !client.isConnected()) {
+	if (!localtime_isKnown() || !client.isConnected()) {
 		return;
 	}
 
@@ -217,7 +217,7 @@ void loop() {
     displayTime();
 	}
 
-	if (localtime_known()) {
+	if (localtime_isKnown()) {
 		auto distance = localtime_millisUntilNextSecond();
 
 		// If there is much time left, let others use it
