@@ -30,6 +30,6 @@ jobs:
           cat $file
 
       - name: PlatformIO Build
-        uses: karniv00l/platformio-run-action@v1.1.0
+        uses: karniv00l/platformio-run-action@v1.1.1
 
       # No need to upload this as it contains fake credentials anyway
