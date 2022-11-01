@@ -16,21 +16,8 @@
 
 #include "localtime.h"
 
-#define CLIENT_NAME "espNeopixelClock"
+#define CLIENT_NAME "espClock"
 const bool MQTT_RETAINED = true;
-
-EspMQTTClient client(
-		WIFI_SSID,
-		WIFI_PASSWORD,
-		MQTT_SERVER,
-		MQTT_USERNAME,
-		MQTT_PASSWORD,
-		CLIENT_NAME,
-		1883);
-
-#define BASIC_TOPIC CLIENT_NAME "/"
-#define BASIC_TOPIC_SET BASIC_TOPIC "set/"
-#define BASIC_TOPIC_STATUS BASIC_TOPIC "status/"
 
 // Which pin is connected to the NeoPixels?
 const int LED_PIN = 13; // D7
@@ -38,6 +25,27 @@ const int DHTPIN = 12;  // D6
 
 // How many NeoPixels are attached?
 const int LED_COUNT = 60;
+
+EspMQTTClient mqttClient(
+	WIFI_SSID,
+	WIFI_PASSWORD,
+	MQTT_SERVER,
+	MQTT_USERNAME,
+	MQTT_PASSWORD,
+	CLIENT_NAME,
+	1883);
+
+#define BASE_TOPIC CLIENT_NAME "/"
+#define BASE_TOPIC_SET BASE_TOPIC "set/"
+#define BASE_TOPIC_STATUS BASE_TOPIC "status/"
+
+#ifdef ESP8266
+	#define LED_BUILTIN_ON LOW
+	#define LED_BUILTIN_OFF HIGH
+#else // for ESP32
+	#define LED_BUILTIN_ON HIGH
+	#define LED_BUILTIN_OFF LOW
+#endif
 
 // Declare our NeoPixel strip object:
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -52,13 +60,13 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 DHTesp dht;
 
-MQTTKalmanPublish mkTemp(client, BASIC_TOPIC_STATUS "temp", MQTT_RETAINED, 12 * 2 /* every 2 min */, 0.2);
-MQTTKalmanPublish mkHum(client, BASIC_TOPIC_STATUS "hum", MQTT_RETAINED, 12 * 5 /* every 5 min */, 2);
-MQTTKalmanPublish mkRssi(client, BASIC_TOPIC_STATUS "rssi", MQTT_RETAINED, 12 * 5 /* every 5 min */, 10);
+MQTTKalmanPublish mkTemp(mqttClient, BASE_TOPIC_STATUS "temp", MQTT_RETAINED, 12 * 2 /* every 2 min */, 0.2);
+MQTTKalmanPublish mkHum(mqttClient, BASE_TOPIC_STATUS "hum", MQTT_RETAINED, 12 * 5 /* every 5 min */, 2);
+MQTTKalmanPublish mkRssi(mqttClient, BASE_TOPIC_STATUS "rssi", MQTT_RETAINED, 12 * 5 /* every 5 min */, 10);
 
 int lastConnected = 0;
-boolean on = true;
-uint8_t mqttBri = 1;
+boolean on = false;
+uint8_t mqttBri = 0;
 const int BRIGHTNESS_FACTOR = 5;
 const uint8_t MAX_BACKGROUND_OFF_BRIGHTNESS = 4;
 
@@ -72,31 +80,31 @@ void setup() {
 
 	dht.setup(DHTPIN, DHTesp::DHT22);
 
-	client.enableDebuggingMessages();
-	client.enableHTTPWebUpdater();
-	client.enableOTA();
-	client.enableLastWillMessage(BASIC_TOPIC "connected", "0", MQTT_RETAINED);
+	mqttClient.enableDebuggingMessages();
+	mqttClient.enableHTTPWebUpdater();
+	mqttClient.enableOTA();
+	mqttClient.enableLastWillMessage(BASE_TOPIC "connected", "0", MQTT_RETAINED);
 }
 
 void onConnectionEstablished() {
-	client.subscribe(BASIC_TOPIC_SET "bri", [](const String &payload) {
+	mqttClient.subscribe(BASE_TOPIC_SET "bri", [](const String &payload) {
 		int value = strtol(payload.c_str(), 0, 10);
 		mqttBri = max(1, min(255 / BRIGHTNESS_FACTOR, value));
 		strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
-		client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
+		mqttClient.publish(BASE_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
 	});
 
-	client.subscribe(BASIC_TOPIC_SET "on", [](const String &payload) {
+	mqttClient.subscribe(BASE_TOPIC_SET "on", [](const String &payload) {
 		boolean value = payload != "0";
 		on = value;
 		strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
-		client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
+		mqttClient.publish(BASE_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
 	});
 
-	client.publish(BASIC_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
-	client.publish(BASIC_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
-	client.publish(BASIC_TOPIC "git-version", GIT_VERSION, MQTT_RETAINED);
-	client.publish(BASIC_TOPIC "connected", "1", MQTT_RETAINED);
+	mqttClient.publish(BASE_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
+	mqttClient.publish(BASE_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
+	mqttClient.publish(BASE_TOPIC "git-version", GIT_VERSION, MQTT_RETAINED);
+	mqttClient.publish(BASE_TOPIC "connected", "1", MQTT_RETAINED);
 	lastConnected = 1;
 }
 
@@ -169,8 +177,8 @@ void displayTime() {
 }
 
 void loop() {
-	client.loop();
-	digitalWrite(LED_BUILTIN, client.isConnected() ? HIGH : LOW);
+	mqttClient.loop();
+	digitalWrite(LED_BUILTIN, mqttClient.isConnected() ? LED_BUILTIN_OFF : LED_BUILTIN_ON);
 
 	static unsigned long nextMeasure = 0;
 	if (millis() >= nextMeasure) {
@@ -180,12 +188,12 @@ void loop() {
 		float h = dht.getHumidity();
 
 		boolean readSuccessful = dht.getStatus() == DHTesp::ERROR_NONE;
-		if (client.isConnected()) {
-			int nextConnected = readSuccessful ? 2 : 1;
-			if (nextConnected != lastConnected) {
+		int nextConnected = readSuccessful ? 2 : 1;
+		if (nextConnected != lastConnected && mqttClient.isConnected()) {
+			bool successful = mqttClient.publish(BASE_TOPIC "connected", String(nextConnected), MQTT_RETAINED);
+			if (successful) {
 				Serial.printf("set /connected from %d to %d\n", lastConnected, nextConnected);
 				lastConnected = nextConnected;
-				client.publish(BASIC_TOPIC "connected", String(nextConnected), MQTT_RETAINED);
 			}
 		}
 
@@ -200,14 +208,14 @@ void loop() {
 			Serial.println(dht.getStatusString());
 		}
 
-		if (client.isWifiConnected()) {
+		if (mqttClient.isWifiConnected()) {
 			long rssi = WiFi.RSSI();
 			float avgRssi = mkRssi.addMeasurement(rssi);
 			Serial.printf("RSSI        in     dBm: %5ld Average: %6.2f\n", rssi, avgRssi);
 		}
 	}
 
-	if (client.isWifiConnected() && localtime_updateNeeded() && localtime_update()) {
+	if (mqttClient.isWifiConnected() && localtime_updateNeeded() && localtime_update()) {
 		// update successful
 		displayTime();
 	}
