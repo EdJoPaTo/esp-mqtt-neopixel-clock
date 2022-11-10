@@ -11,7 +11,7 @@ acetime_t epochSecondsOnUpdate = 0;
 unsigned long referenceMillis = 0;
 static NtpClock ntpClock("fritz.box");
 
-bool localtime_isKnown() { return epochSecondsOnUpdate > 0; }
+bool localtime_isKnown() { return referenceMillis > 0; }
 
 acetime_t localtime_getEpochSeconds()
 {
@@ -37,7 +37,7 @@ unsigned long localtime_millisUntilNextSecond()
 
 bool localtime_updateNeeded()
 {
-	if (epochSecondsOnUpdate == 0)
+	if (referenceMillis == 0)
 		return true;
 
 	if (millis() >= referenceMillis + UPDATE_TIME_EVERY_SECONDS * 1000)
