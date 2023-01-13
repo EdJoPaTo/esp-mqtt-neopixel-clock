@@ -6,7 +6,7 @@
 #include "leds.h"
 #include "localtime.h"
 
-#define CLIENT_NAME "espClock"
+#define CLIENT_NAME "espClock-location"
 const bool MQTT_RETAINED = true;
 
 const int DHTPIN = 12;  // D6
