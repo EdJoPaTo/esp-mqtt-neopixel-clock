@@ -1,30 +1,15 @@
-// NEOPIXEL BEST PRACTICES for most reliable operation:
-// - Add 1000 uF CAPACITOR between NeoPixel strip's + and - connections.
-// - MINIMIZE WIRING LENGTH between microcontroller board and first pixel.
-// - NeoPixel strip's DATA-IN should pass through a 300-500 OHM RESISTOR.
-// - AVOID connecting NeoPixels on a LIVE CIRCUIT. If you must, ALWAYS
-//   connect GROUND (-) first, then +, then data.
-// - When using a 3.3V microcontroller with a 5V-powered NeoPixel strip,
-//   a LOGIC-LEVEL CONVERTER on the data line is STRONGLY RECOMMENDED.
-// (Skipping these may work OK on your workbench but can fail in the field)
-
-#include <Adafruit_NeoPixel.h>
 #include <credentials.h>
 #include <DHTesp.h>
 #include <EspMQTTClient.h>
 #include <MqttKalmanPublish.h>
 
+#include "leds.h"
 #include "localtime.h"
 
 #define CLIENT_NAME "espClock"
 const bool MQTT_RETAINED = true;
 
-// Which pin is connected to the NeoPixels?
-const int LED_PIN = 13; // D7
 const int DHTPIN = 12;  // D6
-
-// How many NeoPixels are attached?
-const int LED_COUNT = 60;
 
 EspMQTTClient mqttClient(
 	WIFI_SSID,
@@ -47,17 +32,6 @@ EspMQTTClient mqttClient(
 	#define LED_BUILTIN_OFF LOW
 #endif
 
-// Declare our NeoPixel strip object:
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-// Argument 1 = Number of pixels in NeoPixel strip
-// Argument 2 = pin number (most are valid)
-// Argument 3 = Pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
-//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
-//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
-
 DHTesp dht;
 
 MQTTKalmanPublish mkTemp(mqttClient, BASE_TOPIC_STATUS "temp", MQTT_RETAINED, 12 * 2 /* every 2 min */, 0.2);
@@ -74,9 +48,7 @@ void setup() {
 	pinMode(LED_BUILTIN, OUTPUT);
 	Serial.begin(115200);
 
-	strip.begin();
-	strip.clear();
-	strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
+	leds_setup();
 
 	dht.setup(DHTPIN, DHTesp::DHT22);
 
@@ -90,13 +62,13 @@ void onConnectionEstablished() {
 	mqttClient.subscribe(BASE_TOPIC_SET "bri", [](const String &payload) {
 		int value = strtol(payload.c_str(), 0, 10);
 		mqttBri = max(1, min(255 / BRIGHTNESS_FACTOR, value));
-		strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
+		leds_set_brightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
 		mqttClient.publish(BASE_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
 	});
 
 	mqttClient.subscribe(BASE_TOPIC_SET "on", [](const String &payload) {
 		on = payload == "1" || payload == "true";
-		strip.setBrightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
+		leds_set_brightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
 		mqttClient.publish(BASE_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
 	});
 
@@ -107,14 +79,7 @@ void onConnectionEstablished() {
 	lastConnected = 1;
 }
 
-void setHsv(int clockIndex, uint16_t hue, uint8_t sat, uint8_t bri) {
-	uint16_t pixel = (clockIndex + 43) % LED_COUNT;
-	strip.setPixelColor(pixel, strip.ColorHSV(hue * 182, sat * 2.55, bri));
-}
-
 void displayTime() {
-	strip.clear();
-
 	if (on) {
 		auto tzTime = localtime_getDateTime();
 		auto hour = tzTime.hour();
@@ -129,12 +94,12 @@ void displayTime() {
 				hour, minute, second, hue, millis() % 1000, referenceMillis % 1000);
 
 		uint16_t hueArr[LED_COUNT];
-		uint8_t satArr[LED_COUNT];
-		uint8_t briArr[LED_COUNT];
+		float satArr[LED_COUNT];
+		float briArr[LED_COUNT];
 		for (int i = 0; i < LED_COUNT; i++) {
 			hueArr[i] = hue;
-			satArr[i] = 100;
-			briArr[i] = 255 / 20;
+			satArr[i] = 1.0;
+			briArr[i] = 0.05;
 		}
 
 		// Hourly ticks
@@ -143,11 +108,11 @@ void displayTime() {
 			auto led = i * HOUR_EVERY_N_LEDS;
 
 			if (mqttBri <= MAX_BACKGROUND_OFF_BRIGHTNESS || led != second) {
-				briArr[led] = i % 3 == 0 ? 255 / 5 : 255 / 10;
+				briArr[led] = i % 3 == 0 ? 0.2 : 0.1;
 			}
 
 			if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
-				satArr[led] = 75;
+				satArr[led] = 0.75;
 			}
 		}
 
@@ -163,16 +128,19 @@ void displayTime() {
 
 			hueArr[second] = (hue + 180) % 360;
 		} else {
-			briArr[minute] = 255;
-			satArr[minute] = 100;
+			briArr[minute] = 1.0;
+			satArr[minute] = 1.0;
 		}
 
 		for (int i = 0; i < LED_COUNT; i++) {
-			setHsv(i, hueArr[i], satArr[i], briArr[i]);
+			uint16_t pixel = (i + 43) % LED_COUNT;
+			leds_set_hsv(pixel, hueArr[i], satArr[i], briArr[i]);
 		}
+	} else {
+		leds_clear();
 	}
 
-	strip.show();
+	leds_show();
 }
 
 void loop() {
