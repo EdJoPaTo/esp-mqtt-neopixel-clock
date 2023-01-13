@@ -28,13 +28,6 @@ void leds_setup()
 {
 	strip.begin();
 	strip.clear();
-	strip.setBrightness(0);
-}
-
-// 0 - 255
-void leds_set_brightness(uint8_t value)
-{
-	strip.setBrightness(value);
 }
 
 void leds_clear()

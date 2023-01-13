@@ -39,10 +39,14 @@ MQTTKalmanPublish mkHum(mqttClient, BASE_TOPIC_STATUS "hum", MQTT_RETAINED, 12 *
 MQTTKalmanPublish mkRssi(mqttClient, BASE_TOPIC_STATUS "rssi", MQTT_RETAINED, 12 * 5 /* every 5 min */, 10);
 
 int lastConnected = 0;
-boolean on = false;
-uint8_t mqttBri = 0;
-const int BRIGHTNESS_FACTOR = 5;
-const uint8_t MAX_BACKGROUND_OFF_BRIGHTNESS = 4;
+bool on = false;
+float mqttBri = 0;
+bool ledsNeedUpdate = false;
+
+// The maximum brightness which still does not show the background color
+const float MAX_BACKGROUND_OFF_BRIGHTNESS = 20 / 255.0f;
+// The minimum brightness that still is readable in complete darkness (needs hourly ticks)
+const float MIN_BRIGHTNESS = 5 / 255.0f;
 
 void setup() {
 	pinMode(LED_BUILTIN, OUTPUT);
@@ -60,15 +64,16 @@ void setup() {
 
 void onConnectionEstablished() {
 	mqttClient.subscribe(BASE_TOPIC_SET "bri", [](const String &payload) {
-		int value = strtol(payload.c_str(), 0, 10);
-		mqttBri = max(1, min(255 / BRIGHTNESS_FACTOR, value));
-		leds_set_brightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
-		mqttClient.publish(BASE_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
+		auto value = strtof(payload.c_str(), 0) / 100.0f;
+		if (!isfinite(value)) return;
+		mqttBri = max(MIN_BRIGHTNESS, min(1.0f, value));
+		ledsNeedUpdate = true;
+		mqttClient.publish(BASE_TOPIC_STATUS "bri", String(mqttBri * 100, 1), MQTT_RETAINED);
 	});
 
 	mqttClient.subscribe(BASE_TOPIC_SET "on", [](const String &payload) {
 		on = payload == "1" || payload == "true";
-		leds_set_brightness(min(255, BRIGHTNESS_FACTOR * mqttBri * on));
+		ledsNeedUpdate = true;
 		mqttClient.publish(BASE_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
 	});
 
@@ -134,7 +139,7 @@ void displayTime() {
 
 		for (int i = 0; i < LED_COUNT; i++) {
 			uint16_t pixel = (i + 43) % LED_COUNT;
-			leds_set_hsv(pixel, hueArr[i], satArr[i], briArr[i]);
+			leds_set_hsv(pixel, hueArr[i], satArr[i], briArr[i] * mqttBri);
 		}
 	} else {
 		leds_clear();
@@ -184,20 +189,21 @@ void loop() {
 
 	if (mqttClient.isWifiConnected() && localtime_updateNeeded() && localtime_update()) {
 		// update successful
-		displayTime();
+		ledsNeedUpdate = true;
 	}
 
 	if (localtime_isKnown()) {
-		auto distance = localtime_millisUntilNextSecond();
-
-		// If there is much time left, let others use it
-		// Otherwise make sure the clock will be updated on time
-		if (distance > 200) {
-			delay(7);
-		} else {
-			delay(distance);
+		if (ledsNeedUpdate) {
 			displayTime();
-			delay(50);
+			ledsNeedUpdate = false;
+		} else {
+			// If there is much time left, let others use it
+			// Otherwise make sure the clock will be updated on time
+			auto distance = localtime_millisUntilNextSecond();
+			if (distance < 200) {
+				delay(distance);
+				displayTime();
+			}
 		}
 	}
 }
