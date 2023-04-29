@@ -157,7 +157,7 @@ void loop() {
 		float t = dht.getTemperature();
 		float h = dht.getHumidity();
 
-		boolean readSuccessful = dht.getStatus() == DHTesp::ERROR_NONE;
+		bool readSuccessful = dht.getStatus() == DHTesp::ERROR_NONE;
 		int nextConnected = readSuccessful ? 2 : 1;
 		if (nextConnected != lastConnected && mqttClient.isConnected()) {
 			bool successful = mqttClient.publish(BASE_TOPIC "connected", String(nextConnected), MQTT_RETAINED);
