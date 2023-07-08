@@ -185,7 +185,7 @@ void loop() {
 		}
 	}
 
-	if (mqttClient.isWifiConnected() && localtime_updateNeeded() && localtime_update()) {
+	if (mqttClient.isWifiConnected() && localtime_update()) {
 		// update successful
 		ledsNeedUpdate = true;
 	}

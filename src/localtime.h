@@ -5,11 +5,10 @@
 using namespace ace_time;
 using namespace ace_time::clock;
 
-const acetime_t UPDATE_TIME_EVERY_SECONDS = 60 * 5; // 5 minutes
+const acetime_t UPDATE_TIME_EVERY_SECONDS = 60 * 29; // 29 minutes
 
 acetime_t epochSecondsOnUpdate = 0;
 unsigned long referenceMillis = 0;
-static NtpClock ntpClock("fritz.box");
 
 bool localtime_isKnown() { return referenceMillis > 0; }
 
@@ -35,35 +34,24 @@ unsigned long localtime_millisUntilNextSecond()
 	return (referenceMillis - current) % 1000;
 }
 
-bool localtime_updateNeeded()
-{
-	if (referenceMillis == 0)
-		return true;
-
-	if (millis() >= referenceMillis + UPDATE_TIME_EVERY_SECONDS * 1000)
-		return true;
-
-	auto epochSeconds = localtime_getEpochSeconds();
-
-	// Update every 5 min -> update on 4:55 so 5:00 will be accurate
-	if (epochSeconds % UPDATE_TIME_EVERY_SECONDS == UPDATE_TIME_EVERY_SECONDS - 5)
-		return true;
-
-	return false;
-}
-
 /// @brief updates the time
 /// @return Successful time update
 bool localtime_update()
 {
-	if (!ntpClock.isSetup())
-		ntpClock.setup();
+	// Only update when needed
+	static unsigned long nextUpdateAttempt = 0;
+	if (millis() < nextUpdateAttempt)
+		return false;
+
+	NtpClock ntpClock("fritz.box");
+	ntpClock.setup();
 
 	auto start = millis();
 	auto first = ntpClock.getNow();
 	if (first == LocalDate::kInvalidEpochSeconds)
 	{
 		Serial.println("localtime_update failed first is invalid");
+		nextUpdateAttempt = millis() + 5000;
 		return false;
 	}
 
@@ -74,6 +62,7 @@ bool localtime_update()
 		if (attempt++ > 50)
 		{
 			Serial.println("localtime_update failed second timed out");
+			nextUpdateAttempt = millis() + 5000;
 			return false;
 		}
 		delay(20);
@@ -85,5 +74,8 @@ bool localtime_update()
 
 	auto took = referenceMillis - start;
 	Serial.printf("localtime_update finished at %3ld and took %ldms\n", referenceMillis % 1000, took);
+
+	nextUpdateAttempt = referenceMillis + UPDATE_TIME_EVERY_SECONDS * 1000;
+
 	return true;
 }
