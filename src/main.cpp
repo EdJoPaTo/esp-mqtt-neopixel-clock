@@ -76,6 +76,7 @@ void onConnectionEstablished() {
 		mqttClient.publish(BASE_TOPIC_STATUS "on", String(on), MQTT_RETAINED);
 	});
 
+	mqttClient.publish(BASE_TOPIC "git-remote", GIT_REMOTE, MQTT_RETAINED);
 	mqttClient.publish(BASE_TOPIC "git-version", GIT_VERSION, MQTT_RETAINED);
 	mqttClient.publish(BASE_TOPIC "connected", "1", MQTT_RETAINED);
 	lastConnected = 1;
