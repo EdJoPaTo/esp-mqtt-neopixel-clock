@@ -8,7 +8,7 @@
 
 const bool MQTT_RETAINED = true;
 
-const int DHTPIN = 12;  // D6
+const int DHTPIN = 12; // D6
 
 EspMQTTClient mqttClient(
 	WIFI_SSID,
@@ -39,13 +39,10 @@ MQTTKalmanPublish mkRssi(mqttClient, BASE_TOPIC_STATUS "rssi", MQTT_RETAINED, 12
 
 int lastConnected = 0;
 bool on = false;
-float mqttBri = 0;
+uint16_t mqttHue = 120; // green
+float mqttSat = 1.0;
+uint8_t mqttBri = 0;
 bool ledsNeedUpdate = false;
-
-// The maximum brightness which still does not show the background color
-const float MAX_BACKGROUND_OFF_BRIGHTNESS = 20 / 255.0f;
-// The minimum brightness that still is readable in complete darkness (needs hourly ticks)
-const float MIN_BRIGHTNESS = 5 / 255.0f;
 
 void setup() {
 	pinMode(LED_BUILTIN, OUTPUT);
@@ -62,12 +59,26 @@ void setup() {
 }
 
 void onConnectionEstablished() {
-	mqttClient.subscribe(BASE_TOPIC_SET "bri", [](const String &payload) {
+	mqttClient.subscribe(BASE_TOPIC_SET "hue", [](const String &payload) {
+		auto value = strtol(payload.c_str(), 0, 10);
+		mqttHue = abs(value) % 360;
+		ledsNeedUpdate = true;
+		mqttClient.publish(BASE_TOPIC_STATUS "hue", String(mqttHue), MQTT_RETAINED);
+	});
+
+	mqttClient.subscribe(BASE_TOPIC_SET "sat", [](const String &payload) {
 		auto value = strtof(payload.c_str(), 0) / 100.0f;
 		if (!isfinite(value)) return;
-		mqttBri = max(MIN_BRIGHTNESS, min(1.0f, value));
+		mqttSat = max(0.0f, min(1.0f, value));
 		ledsNeedUpdate = true;
-		mqttClient.publish(BASE_TOPIC_STATUS "bri", String(mqttBri * 100, 1), MQTT_RETAINED);
+		mqttClient.publish(BASE_TOPIC_STATUS "sat", String(mqttSat * 100, 1), MQTT_RETAINED);
+	});
+
+	mqttClient.subscribe(BASE_TOPIC_SET "bri", [](const String &payload) {
+		auto value = strtol(payload.c_str(), 0, 10);
+		mqttBri = max(1l, min(50l, value)); // 255 is probably too dangerous with power consumption
+		ledsNeedUpdate = true;
+		mqttClient.publish(BASE_TOPIC_STATUS "bri", String(mqttBri), MQTT_RETAINED);
 	});
 
 	mqttClient.subscribe(BASE_TOPIC_SET "on", [](const String &payload) {
@@ -89,55 +100,46 @@ void displayTime() {
 		auto minute = tzTime.minute();
 		auto second = tzTime.second();
 
-		auto minuteOfDay = (hour * 60) + minute;
-		uint16_t hue = minuteOfDay % 360;
-
 		Serial.printf(
-				"displayTime %2d:%02d:%02d  hue %3d  at %3ld (ideal: %3ld)\n",
-				hour, minute, second, hue, millis() % 1000, referenceMillis % 1000);
+				"displayTime %2d:%02d:%02d  at %3ld (ideal: %3ld)\n",
+				hour, minute, second, millis() % 1000, referenceMillis % 1000);
 
 		uint16_t hueArr[LED_COUNT];
 		float satArr[LED_COUNT];
 		float briArr[LED_COUNT];
+		auto brightnessPercentage = mqttBri / 255.0f;
 		for (int i = 0; i < LED_COUNT; i++) {
-			hueArr[i] = hue;
-			satArr[i] = 1.0;
-			briArr[i] = 0.05;
+			hueArr[i] = mqttHue;
+			satArr[i] = mqttSat;
+			briArr[i] = brightnessPercentage;
 		}
 
 		// Hourly ticks
 		const int HOUR_EVERY_N_LEDS = LED_COUNT / 12;
 		for (int i = 0; i < 12; i++) {
 			auto led = i * HOUR_EVERY_N_LEDS;
-
-			if (mqttBri <= MAX_BACKGROUND_OFF_BRIGHTNESS || led != second) {
-				briArr[led] = i % 3 == 0 ? 0.2 : 0.1;
-			}
-
-			if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
-				satArr[led] = 0.75;
+			if (led != second && led != minute) {
+				briArr[led] *= i % 3 == 0 ? 4 : 2;
+				satArr[led] *= 0.80;
 			}
 		}
 
 		// clock hands
-
-		if (mqttBri > MAX_BACKGROUND_OFF_BRIGHTNESS) {
-			for (int i = -2; i <= 2; i++) {
-				uint8_t resulting_minute = (minute + 60 + i) % 60;
-				if (resulting_minute != second) {
-					briArr[resulting_minute] = 0;
-				}
+		hueArr[second] = (mqttHue + 180) % 360;
+		if (second != minute) {
+			briArr[minute] = 0;
+		}
+		uint8_t hourish = (hour * 5) + (minute / 12);
+		for (int i = -2; i <= 2; i++) {
+			uint8_t p = (hourish + 60 + i) % 60;
+			if (p != second && p != minute) {
+				briArr[p] = 0;
 			}
-
-			hueArr[second] = (hue + 180) % 360;
-		} else {
-			briArr[minute] = 1.0;
-			satArr[minute] = 1.0;
 		}
 
 		for (int i = 0; i < LED_COUNT; i++) {
 			uint16_t pixel = (i + 43) % LED_COUNT;
-			leds_set_hsv(pixel, hueArr[i], satArr[i], briArr[i] * mqttBri);
+			leds_set_hsv(pixel, hueArr[i], satArr[i], briArr[i]);
 		}
 	} else {
 		leds_clear();
