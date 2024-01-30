@@ -125,17 +125,18 @@ void displayTime() {
 		}
 
 		// clock hands
-		hueArr[second] = (mqttHue + 180) % 360;
-		if (second != minute) {
-			briArr[minute] = 0;
-		}
 		uint8_t hourish = (hour * 5) + (minute / 12);
 		for (int i = -2; i <= 2; i++) {
-			uint8_t p = (hourish + 60 + i) % 60;
-			if (p != second && p != minute) {
-				briArr[p] = 0;
-			}
+			briArr[(hourish + 60 + i) % 60] = 0;
 		}
+
+		briArr[(minute + 59) % 60] /= 5;
+		briArr[minute] = 0;
+		briArr[(minute + 1) % 60] /= 5;
+
+		hueArr[second] = (mqttHue + 180) % 360;
+		satArr[second] = mqttSat;
+		briArr[second] = brightnessPercentage;
 
 		for (int i = 0; i < LED_COUNT; i++) {
 			uint16_t pixel = (i + 43) % LED_COUNT;
