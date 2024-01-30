@@ -126,13 +126,15 @@ void displayTime() {
 
 		// clock hands
 		uint8_t hourish = (hour * 5) + (minute / 12);
-		for (int i = -2; i <= 2; i++) {
-			briArr[(hourish + 60 + i) % 60] = 0;
-		}
+		briArr[(hourish + 58) % 60] = 0;
+		briArr[(hourish + 59) % 60] = 0;
+		briArr[hourish % 60] = 0;
+		briArr[(hourish + 1) % 60] = 0;
+		briArr[(hourish + 2) % 60] = 0;
 
-		briArr[(minute + 59) % 60] /= 5;
+		briArr[(minute + 59) % 60] = 0;
 		briArr[minute] = 0;
-		briArr[(minute + 1) % 60] /= 5;
+		briArr[(minute + 1) % 60] = 0;
 
 		hueArr[second] = (mqttHue + 180) % 360;
 		satArr[second] = mqttSat;
